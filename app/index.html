@@ -1,0 +1,305 @@
+<html>
+  <head>
+    <title>BUSH</title>
+    <style>
+      body {
+        font-family: "Helvetica", sans-serif;
+        background-color: #0f171f;
+        color: #e5e5e5;
+      }
+      table {
+        margin-top: 1em;
+      }
+      table th {
+        text-align: left;
+        padding-right: 0.5em;
+      }
+      button {
+        background-color: #dedede;
+        color: #121212;
+        text-transform: capitalize;
+        border-radius: 0.2em;
+        border: none;
+        padding: 0.3em 0.7em;
+        font-weight: bold;
+      }
+      button:hover {
+        background-color: #f5f5f5;
+        cursor: pointer;
+      }
+      h1,
+      h2,
+      h3,
+      h4 {
+        color: #eeeeee;
+      }
+      #device-measurements,
+      #triggered-measurements {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5em;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>PLR 50C demo</h1>
+    <p>
+      This demo uses the Bosch PLR 50C. Other Bosch laser range finders might
+      work as well but aren't tested.
+    </p>
+    <p>Check console for logs.</p>
+    <button id="connect-btn">Connect Device</button>
+    <table id="device-info">
+      <tr>
+        <th>Device ID</th>
+        <td>-</td>
+      </tr>
+      <tr>
+        <th>Name</th>
+        <td>-</td>
+      </tr>
+      <tr>
+        <th>Gatt Connected</th>
+        <td>-</td>
+      </tr>
+      <tr>
+        <th>Timestamp</th>
+        <td>-</td>
+      </tr>
+    </table>
+    <div>
+      <h2>Connected Controlls</h2>
+      <div>
+        <button id="beep-btn">Beep</button>
+        <button id="measure-btn">Trigger measurement</button>
+        <button id="laser-on">Blink Laser</button>
+      </div>
+      <h4>Triggered Measurements (raw data)</h4>
+      <div id="triggered-measurements"></div>
+    </div>
+    <div>
+      <h2>Device measurements</h2>
+      <div id="device-measurements"></div>
+    </div>
+    <script>
+      let service;
+      let bluetoothGattServer; // {connected: true, device: BluetoothDevice, …}
+      let characteristic;
+
+      document
+        .getElementById("connect-btn")
+        .addEventListener("click", function (event) {
+          // primary service UUID
+          const glmServiceUuid = "00005301-0000-0041-5253-534f46540000";
+          const characteristicUuid = "00004301-0000-0041-5253-534f46540000";
+
+          // filters used to filter out devices that are not Bosch PLR devices
+          const filters = [
+            { namePrefix: "Bosch PLR" },
+            { services: [glmServiceUuid] },
+          ];
+
+          navigator.bluetooth
+            .requestDevice({
+              filters,
+              optionalServices: [characteristicUuid],
+            })
+            .then((device) => {
+              console.log("Device connected: " + device.name);
+              setDeviceInfo(device);
+              return device.gatt.connect();
+            })
+            .then((server) => {
+              bluetoothGattServer = server;
+              console.log("Connected to GATT server");
+              setInfoGattConnected(server.connected);
+
+              // get primary service and then the characteristic
+              return bluetoothGattServer
+                .getPrimaryService(glmServiceUuid)
+                .then((s) => {
+                  service = s;
+                  return s.getCharacteristic(characteristicUuid);
+                });
+            })
+            .then((c) => {
+              console.log("Characteristic found");
+              characteristic = c;
+
+              // we need to enable indications to allow the device to send data without being polled
+              // startNotifications() enables indications as well as notifications
+              return c.startNotifications();
+            })
+            .then(() => {
+              // "AutoSyncEnable" command, sets the device to send data when a measurement is
+              // triggered on the device
+              const data = new Uint8Array([0xc0, 0x55, 0x02, 0x01, 0x00, 0x1a]);
+              return characteristic.writeValue(data);
+            })
+            .then(() => {
+              // add listner for events (indications) triggered by device
+              characteristic.addEventListener(
+                "characteristicvaluechanged",
+                indicationEvent
+              );
+            })
+            .then(() => {
+              console.log("Server, service, characteristic ready", {
+                bluetoothGattServer,
+                service,
+                characteristic,
+              });
+              // a beep when we are done connecting
+              return beep();
+            })
+            .catch((error) => {
+              console.error("An error occurred: ", error);
+            });
+        });
+
+      document.getElementById("beep-btn").addEventListener("click", longBeep);
+
+      document.getElementById("measure-btn").addEventListener("click", () => {
+        console.log("send: measure");
+        // measure
+        return characteristic.writeValue(
+          new Uint8Array([0xc0, 0x40, 0x01, 0x00, 0xfa])
+        );
+      });
+      document.getElementById("laser-on").addEventListener("click", () => {
+        console.log("send: laser on");
+        // laser on
+        return characteristic.writeValue(
+          new Uint8Array([0xc0, 0x41, 0x00, 0x96])
+        );
+      });
+
+      function setDeviceInfo(device) {
+        let tableCells = document.querySelectorAll("#device-info td");
+
+        tableCells[0].innerHTML = device.id;
+        tableCells[1].innerHTML = device.name;
+        tableCells[2].innerHTML = device.gatt.connected;
+        tableCells[3].innerHTML = new Date().toISOString();
+      }
+
+      function setInfoGattConnected(gattConnected) {
+        let tableCells = document.querySelectorAll("#device-info td");
+        tableCells[2].innerHTML = gattConnected;
+      }
+
+      function beep() {
+        console.log("send: beep on, beep off");
+
+        // turn beeper on
+        return characteristic
+          .writeValue(new Uint8Array([0xc0, 0x45, 0x00, 0xd0]))
+          .then(() => {
+            // turn beeper off
+            return characteristic.writeValue(
+              new Uint8Array([0xc0, 0x46, 0x00, 0x58])
+            );
+          });
+      }
+
+      function longBeep() {
+        console.log("Send: beep on, beep off");
+        // turn beeper on
+        return characteristic
+          .writeValue(new Uint8Array([0xc0, 0x45, 0x00, 0xd0]))
+          .then(() => {
+            return new Promise((resolve) => {
+              setTimeout(() => {
+                characteristic
+                  .writeValue(new Uint8Array([0xc0, 0x46, 0x00, 0x58]))
+                  .then(resolve);
+              }, 750);
+            });
+          });
+      }
+
+      function indicationEvent(event) {
+        // event.target.value is a DataView containing the characteristic's new value
+        let message = event.target.value;
+
+        // Join the hexadecimal strings into a single string
+        // to desplay the full command in a human readable format
+        let hexString = dataViewToString(message);
+
+        if (hexString === "000082") {
+          console.log("Receive:", "OK");
+        } else if (hexString.length === 40 && hexString.startsWith("c055")) {
+          // mode: 0xc0, request-command: 0x55
+          // 0x55 is command 85 which is "Exchange data container"
+          // this example assumnes it is a distance measurement triggered
+          // from the device, other commands are not accounted for
+          // check MT_connectivity_protocol_LRF_command_set_2_5_0.pdf for more
+          console.log("Receive:", "Exchange Data Container");
+          parseExchangeDataContainer(message, hexString);
+        } else if (hexString.length === 14 && hexString.startsWith("0004")) {
+          // assume it is a measurment triggered from browser
+          console.log("Receive:", "Short Form Message");
+
+          // TODO: parse these into actual measurments
+          document.getElementById("triggered-measurements").innerHTML += `<span>
+            ${hexString}</span>`;
+        } else {
+          console.log("Receive:", "Unknown", hexString);
+        }
+      }
+
+      function parseExchangeDataContainer(message, hexString) {
+        // Create an ArrayBuffer with enough space to hold the measurement bytes
+        // Create a DataView from the ArrayBuffer
+        let measurementDataView = new DataView(new ArrayBuffer(4));
+        console.log("222", measurementDataView);
+
+        // Loop over the measurement bytes in the DataView
+        for (let i = 7; i < 11; i++) {
+          // Get the byte as an unsigned 8-bit integer
+          let byte = message.getUint8(i);
+          measurementDataView.setUint8(i - 7, byte);
+        }
+
+        // Extract the mode, request-command, data length, data, and checksum
+        let mode = hexString.slice(0, 2);
+        let requestCommand = hexString.slice(2, 4);
+        let dataLength = hexString.slice(4, 6); // For LONG format
+        let data = hexString.slice(6, 6 + 2 * parseInt(dataLength, 16));
+        let checksum = hexString.slice(-2); // For LONG format
+        let measurement = measurementDataView.getFloat32(0, true);
+
+        console.log("Message:", {
+          RawMessage: message,
+          MessageAsHexString: hexString,
+          SplitIntoParts: {
+            mode,
+            requestCommand,
+            dataLength,
+            data,
+            checksum,
+          },
+          data: {
+            rawResult: hexString.slice(6, 14),
+            component1: hexString.slice(14, 22), // this is the measurement
+            component2: hexString.slice(22, 30),
+          },
+          measurement,
+        });
+
+        let measurementSpan = document.getElementById("device-measurements");
+        measurementSpan.innerHTML += `<span>
+          ${measurement.toFixed(3)}</span>`;
+      }
+
+      function dataViewToString(dataView) {
+        let hexString = "";
+        for (let i = 0; i < dataView.byteLength; i++) {
+          let byte = dataView.getUint8(i);
+          hexString += byte.toString(16).padStart(2, "0");
+        }
+        return hexString;
+      }
+    </script>
+  </body>
+</html>
