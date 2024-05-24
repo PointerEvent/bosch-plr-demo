@@ -45,15 +45,12 @@
         padding: 2em;
         border-radius: 0.2em;
         margin-bottom: 1em;
+        display: none;
       }
     </style>
     <script>
       window.onload = function () {
-        var isChrome =
-          !!window.chrome &&
-          (!!window.chrome.webstore || !!window.chrome.runtime);
-        var isEdge = !isIE && !!window.StyleMedia;
-        if (!isChrome && !isEdge) {
+        if (!navigator.bluetooth) {
           document.querySelector(".warning").style.display = "block";
         }
       };
@@ -61,8 +58,8 @@
   </head>
   <body>
     <div class="warning">
-      Navigator: bluetooth is at the time of writing only supported in Chrome
-      and Edge
+      <i>Navigator: bluetooth</i> is not supported in your browser. At the time
+      of writing it is only supported in Chrome and Edge.
     </div>
     <h1>PLR 50C demo</h1>
     <p>
