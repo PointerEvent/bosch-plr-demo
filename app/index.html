@@ -156,7 +156,7 @@
               return characteristic.writeValue(data);
             })
             .then(() => {
-              // add listner for events (indications) triggered by device
+              // add listener for events (indications) triggered by device
               characteristic.addEventListener(
                 "characteristicvaluechanged",
                 indicationEvent
@@ -242,50 +242,39 @@
         let message = event.target.value;
 
         // Join the hexadecimal strings into a single string
-        // to desplay the full command in a human readable format
+        // to display the full command in a human-readable format
         let hexString = dataViewToString(message);
 
         if (hexString === "000082") {
           console.log("Receive:", "OK");
-        } else if (hexString.length === 40 && hexString.startsWith("c055")) {
+        } else if (hexString.startsWith("c055")) {
           // mode: 0xc0, request-command: 0x55
           // 0x55 is command 85 which is "Exchange data container"
-          // this example assumnes it is a distance measurement triggered
+          // this example assumes it is a distance measurement triggered
           // from the device, other commands are not accounted for
           // check MT_connectivity_protocol_LRF_command_set_2_5_0.pdf for more
           console.log("Receive:", "Exchange Data Container");
           parseExchangeDataContainer(message, hexString);
         } else if (hexString.length === 14 && hexString.startsWith("0004")) {
-          // assume it is a measurment triggered from browser
+          // assume it is a measurement triggered from browser
           console.log("Receive:", "Short Form Message");
 
-          // TODO: parse these into actual measurments
+          // TODO: parse these into actual measurements
           document.getElementById("triggered-measurements").innerHTML += `<span>
-            ${hexString}</span>`;
+			${hexString}</span>`;
         } else {
           console.log("Receive:", "Unknown", hexString);
         }
       }
 
-      function parseExchangeDataContainer(message, hexString) {
-        // Create an ArrayBuffer with enough space to hold the measurement bytes
-        // Create a DataView from the ArrayBuffer
-        let measurementDataView = new DataView(new ArrayBuffer(4));
-
-        // Loop over the measurement bytes in the DataView
-        for (let i = 7; i < 11; i++) {
-          // Get the byte as an unsigned 8-bit integer
-          let byte = message.getUint8(i);
-          measurementDataView.setUint8(i - 7, byte);
-        }
-
+    function parseExchangeDataContainer(message, hexString) {
         // Extract the mode, request-command, data length, data, and checksum
         let mode = hexString.slice(0, 2);
         let requestCommand = hexString.slice(2, 4);
-        let dataLength = hexString.slice(4, 6); // For LONG format
-        let data = hexString.slice(6, 6 + 2 * parseInt(dataLength, 16));
-        let checksum = hexString.slice(-2); // For LONG format
-        let measurement = measurementDataView.getFloat32(0, true);
+        let dataLengthHex = hexString.slice(4, 6);
+        let dataLength = parseInt(dataLengthHex, 16);
+        let data = dataLength === 0 ? {} : extractData(message, 3, dataLength);
+        let checksum = hexString.slice(-2); // TODO: verification of the checksum (CRC8)
 
         console.log("Message:", {
           RawMessage: message,
@@ -293,21 +282,74 @@
           SplitIntoParts: {
             mode,
             requestCommand,
-            dataLength,
-            data,
+                dataLengthHex,
+                dataLength,
             checksum,
           },
-          data: {
-            rawResult: hexString.slice(6, 14),
-            component1: hexString.slice(14, 22), // this is the measurement
-            component2: hexString.slice(22, 30),
-          },
-          measurement,
+            dataHex: hexString.slice(6, 6 + 2 * dataLength),
+            data
         });
 
         let measurementSpan = document.getElementById("device-measurements");
         measurementSpan.innerHTML += `<span>
-          ${measurement.toFixed(3)}</span>`;
+		  ${data.result.toFixed(3)}</span>`;
+    }
+
+    function extractData(message, start, length)
+    {
+        if (length < 16) {
+            console.error("Data length is too short");
+            return {};
+        }
+        // TODO: handle data length > 16
+
+        let DevModeRef = message.getUint8(start);
+        let DevStatus = message.getUint8(start+1);
+        let UniqueID = message.getUint16(start+2);
+
+        // Create an ArrayBuffer with enough space to hold the measurements (4 bytes
+        // Create a DataView from the ArrayBuffer
+        let resultDataView = new DataView(new ArrayBuffer(4));
+        let component1DataView = new DataView(new ArrayBuffer(4));
+        let component2DataView = new DataView(new ArrayBuffer(4));
+
+
+
+        // Loop over the measurement bytes in the DataView
+        for (let i = start+4; i < start+8; i++) {
+            // Get the byte as an unsigned 8-bit integer
+            let byte = message.getUint8(i);
+            resultDataView.setUint8(i - 4-start, byte);
+        }
+        for (let i = start+8; i < start+12; i++) {
+            let byte = message.getUint8(i);
+            component1DataView.setUint8(i - 8-start, byte);
+        }
+        for (let i = start+12; i < start+16; i++) {
+            let byte = message.getUint8(i);
+            component2DataView.setUint8(i - 12-start, byte);
+        }
+
+        return {
+            DevModeRef,
+            DevModeRefHex: DevModeRef.toString(16),
+            DevModeRefBin: DevModeRef.toString(2),
+            DevMode: DevModeRef>>2,
+            ReferenceEdge: DevModeRef & 11,
+            DevStatus,
+            DevStatusHex: DevStatus.toString(16),
+            DevStatusBin: DevStatus.toString(2),
+            MetricSystem: (DevStatus & 0b1000) !== 0,
+            LowBatteryWarning: (DevStatus & 0b0100) !== 0,
+            TemperatureWarning: (DevStatus & 0b0010) !== 0,
+            LaserStatus: (DevStatus & 0b0001) !== 0,
+            UniqueID,
+            UniqueIDHex: UniqueID.toString(16),
+            UniqueIDBin: UniqueID.toString(2),
+            result : resultDataView.getFloat32(0, true),
+            component1 : component1DataView.getFloat32(0, true),
+            component2 : component2DataView.getFloat32(0, true)
+        };
       }
 
       function dataViewToString(dataView) {
