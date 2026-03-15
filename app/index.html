@@ -1,365 +1,596 @@
-<html>
-  <head>
-    <title>BUSH</title>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bosch PLR/GLM Web Bluetooth Demo</title>
     <style>
-      body {
-        font-family: "Helvetica", sans-serif;
-        background-color: #0f171f;
-        color: #e5e5e5;
-      }
-      table {
-        margin-top: 1em;
-      }
-      table th {
-        text-align: left;
-        padding-right: 0.5em;
-      }
-      button {
-        background-color: #dedede;
-        color: #121212;
-        text-transform: capitalize;
-        border-radius: 0.2em;
-        border: none;
-        padding: 0.3em 0.7em;
-        font-weight: bold;
-      }
-      button:hover {
-        background-color: #f5f5f5;
-        cursor: pointer;
-      }
-      h1,
-      h2,
-      h3,
-      h4 {
-        color: #eeeeee;
-      }
-      #device-measurements,
-      #triggered-measurements {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5em;
-      }
-      .warning {
-        background-color: #c93939;
-        color: #f5f5f5;
-        padding: 2em;
-        border-radius: 0.2em;
-        margin-bottom: 1em;
-        display: none;
-      }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, sans-serif;
+            background-color: #0f171f;
+            color: #e5e5e5;
+            padding: 1.5em;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 { font-size: 1.5em; margin-bottom: 0.25em; }
+        h2 { font-size: 1.1em; margin: 1.5em 0 0.5em; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+        p { color: #9ca3af; font-size: 0.9em; margin-bottom: 1em; }
+        a { color: #60a5fa; }
+
+        button {
+            background-color: #374151;
+            color: #e5e5e5;
+            border: 1px solid #4b5563;
+            border-radius: 0.375em;
+            padding: 0.5em 1em;
+            font-size: 0.875em;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.15s;
+        }
+        button:hover:not(:disabled) { background-color: #4b5563; }
+        button:disabled { opacity: 0.4; cursor: not-allowed; }
+        button.primary { background-color: #2563eb; border-color: #3b82f6; }
+        button.primary:hover:not(:disabled) { background-color: #1d4ed8; }
+        button.danger { background-color: #dc2626; border-color: #ef4444; }
+        button.danger:hover:not(:disabled) { background-color: #b91c1c; }
+        button.success { background-color: #059669; border-color: #10b981; }
+        button.success:hover:not(:disabled) { background-color: #047857; }
+
+        .card {
+            background-color: #1f2937;
+            border: 1px solid #374151;
+            border-radius: 0.5em;
+            padding: 1em;
+            margin-bottom: 1em;
+        }
+
+        .connection-bar { display: flex; align-items: center; gap: 1em; flex-wrap: wrap; }
+        .status-dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            background-color: #6b7280;
+            display: inline-block;
+        }
+        .status-dot.connecting { background-color: #f59e0b; animation: pulse 1s infinite; }
+        .status-dot.connected { background-color: #10b981; }
+        .status-dot.error { background-color: #ef4444; }
+        @keyframes pulse { 50% { opacity: 0.5; } }
+        .status-text { font-size: 0.875em; color: #9ca3af; }
+
+        .device-info { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.75em; }
+        .info-item label { display: block; font-size: 0.75em; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; }
+        .info-item span { font-size: 0.95em; font-variant-numeric: tabular-nums; }
+
+        .controls { display: flex; gap: 0.5em; flex-wrap: wrap; align-items: flex-end; }
+        .control-group { display: flex; flex-direction: column; gap: 0.25em; }
+        .control-group-label { font-size: 0.7em; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; }
+
+        select {
+            background-color: #374151;
+            color: #e5e5e5;
+            border: 1px solid #4b5563;
+            border-radius: 0.375em;
+            padding: 0.5em 0.75em;
+            font-size: 0.875em;
+        }
+
+        .measurement-result {
+            font-size: 2.5em;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            text-align: center;
+            padding: 0.5em;
+            color: #60a5fa;
+        }
+        .measurement-result .unit { font-size: 0.4em; color: #6b7280; font-weight: 400; }
+        .measurement-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 0.5em;
+            font-size: 0.85em;
+        }
+        .measurement-details .detail label { display: block; font-size: 0.75em; color: #6b7280; }
+        .measurement-details .detail span { font-variant-numeric: tabular-nums; }
+
+        .measurement-list { max-height: 300px; overflow-y: auto; font-size: 0.85em; }
+        .measurement-list table { width: 100%; border-collapse: collapse; }
+        .measurement-list th { text-align: left; color: #6b7280; font-weight: 500; font-size: 0.8em; text-transform: uppercase; padding: 0.5em; border-bottom: 1px solid #374151; }
+        .measurement-list td { padding: 0.4em 0.5em; border-bottom: 1px solid #1f2937; font-variant-numeric: tabular-nums; }
+        .measurement-list tr:hover td { background-color: #1f2937; }
+
+        .raw-log {
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, monospace;
+            font-size: 0.75em;
+            line-height: 1.6;
+            color: #6b7280;
+        }
+        .raw-log .rx { color: #34d399; }
+        .raw-log .tx { color: #fbbf24; }
+        .raw-log .err { color: #f87171; }
+
+        .warning {
+            background-color: #7f1d1d;
+            border: 1px solid #dc2626;
+            color: #fca5a5;
+            padding: 1em;
+            border-radius: 0.5em;
+            margin-bottom: 1em;
+            display: none;
+        }
+
+        input[type="text"] {
+            background-color: #374151;
+            color: #e5e5e5;
+            border: 1px solid #4b5563;
+            border-radius: 0.375em;
+            padding: 0.5em 0.75em;
+            font-size: 0.875em;
+            font-family: "SF Mono", "Fira Code", monospace;
+        }
+        .cmd-preset { font-size: 0.7em !important; padding: 0.3em 0.6em !important; }
+
+        .hidden { display: none !important; }
     </style>
-    <script>
-      window.onload = function () {
-        if (!navigator.bluetooth) {
-          document.querySelector(".warning").style.display = "block";
-        }
-      };
-    </script>
-  </head>
-  <body>
-    <div class="warning">
-      <i>Navigator: bluetooth</i> is not supported in your browser. Currently,
-      it is only supported in Chrome and Edge.
-    </div>
-    <h1>PLR 50C demo</h1>
+</head>
+<body>
+    <h1>Bosch PLR/GLM Web Bluetooth Demo</h1>
     <p>
-      This demo uses the Bosch PLR 50C. Other Bosch laser range finders might
-      work as well but aren't tested.
+        Connect to a Bosch PLR 50C or GLM laser rangefinder via Web Bluetooth.
+        Requires Chrome or Edge with Web Bluetooth support.
     </p>
-    <p>Check console for logs.</p>
-    <button id="connect-btn">Connect Device</button>
-    <table id="device-info">
-      <tr>
-        <th>Device ID</th>
-        <td>-</td>
-      </tr>
-      <tr>
-        <th>Name</th>
-        <td>-</td>
-      </tr>
-      <tr>
-        <th>Gatt Connected</th>
-        <td>-</td>
-      </tr>
-      <tr>
-        <th>Timestamp</th>
-        <td>-</td>
-      </tr>
-    </table>
-    <div>
-      <h2>Connected Controlls</h2>
-      <div>
-        <button id="beep-btn">Beep</button>
-        <button id="measure-btn">Trigger measurement</button>
-        <button id="laser-on">Blink Laser</button>
-      </div>
-      <h4>Triggered Measurements (raw data)</h4>
-      <div id="triggered-measurements"></div>
+
+    <div class="warning" id="warning">
+        Web Bluetooth API is not available in this browser. Please use Chrome or Edge.
     </div>
-    <div>
-      <h2>Device measurements</h2>
-      <div id="device-measurements"></div>
+
+    <!-- Connection -->
+    <div class="card">
+        <div class="connection-bar">
+            <button id="connect-btn" class="primary">Connect Device</button>
+            <button id="disconnect-btn" class="danger hidden">Disconnect</button>
+            <span class="status-dot" id="status-dot"></span>
+            <span class="status-text" id="status-text">Not connected</span>
+        </div>
     </div>
-    <script>
-      let service;
-      let bluetoothGattServer; // {connected: true, device: BluetoothDevice, …}
-      let characteristic;
 
-      document
-        .getElementById("connect-btn")
-        .addEventListener("click", function (event) {
-          // primary service UUID
-          const glmServiceUuid = "00005301-0000-0041-5253-534f46540000";
-          const characteristicUuid = "00004301-0000-0041-5253-534f46540000";
+    <!-- Device Info -->
+    <div class="card hidden" id="device-info-card">
+        <h2>Device</h2>
+        <div class="device-info">
+            <div class="info-item">
+                <label>Name</label>
+                <span id="info-name">—</span>
+            </div>
+            <div class="info-item">
+                <label>Battery</label>
+                <span id="info-battery">—</span>
+            </div>
+            <div class="info-item">
+                <label>Temperature</label>
+                <span id="info-temperature">—</span>
+            </div>
+            <div class="info-item">
+                <label>Laser</label>
+                <span id="info-laser">—</span>
+            </div>
+        </div>
+    </div>
 
-          // filters used to filter out devices that are not Bosch PLR devices
-          const filters = [
-            { namePrefix: "Bosch PLR" },
-            { services: [glmServiceUuid] },
-          ];
+    <!-- Controls -->
+    <div class="card hidden" id="controls-card">
+        <h2>Measure</h2>
+        <div class="controls">
+            <div class="control-group">
+                <span class="control-group-label">Edge</span>
+                <select id="edge-select">
+                    <option value="0">Front (0x00)</option>
+                    <option value="128" selected>Rear (0x80)</option>
+                    <option value="192">Tripod (0xC0)</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <button id="measure-btn" class="success">Measure Distance</button>
+            </div>
+            <div class="control-group">
+                <span class="control-group-label">Laser</span>
+                <button id="laser-on-btn">Flash</button>
+            </div>
+            <div class="control-group">
+                <span class="control-group-label">Beep</span>
+                <button id="beep-btn">Beep</button>
+            </div>
+            <div class="control-group">
+                <span class="control-group-label">Backlight</span>
+                <div style="display:flex; gap:0.25em;">
+                    <button id="backlight-on-btn">On</button>
+                    <button id="backlight-off-btn">Off</button>
+                </div>
+            </div>
+        </div>
+        <p style="margin-top: 0.75em; font-size: 0.8em;">
+            For angle, area, or volume, change mode on the device — results sync automatically.
+        </p>
+    </div>
 
-          navigator.bluetooth
-            .requestDevice({
-              filters,
-              optionalServices: [characteristicUuid],
-            })
-            .then((device) => {
-              console.log("Device connected: " + device.name);
-              setDeviceInfo(device);
-              return device.gatt.connect();
-            })
-            .then((server) => {
-              bluetoothGattServer = server;
-              console.log("Connected to GATT server");
-              setInfoGattConnected(server.connected);
+    <!-- Last Measurement -->
+    <div class="card hidden" id="measurement-card">
+        <h2>Last Measurement</h2>
+        <div class="measurement-result" id="measurement-result">—</div>
+        <div class="measurement-details" id="measurement-details"></div>
+    </div>
 
-              // get primary service and then the characteristic
-              return bluetoothGattServer
-                .getPrimaryService(glmServiceUuid)
-                .then((s) => {
-                  service = s;
-                  return s.getCharacteristic(characteristicUuid);
-                });
-            })
-            .then((c) => {
-              console.log("Characteristic found");
-              characteristic = c;
+    <!-- Measurement History -->
+    <div class="card hidden" id="history-card">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h2 style="margin: 0;">History</h2>
+            <button id="clear-history-btn" style="font-size: 0.75em;">Clear</button>
+        </div>
+        <div class="measurement-list">
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Source</th>
+                        <th>Type</th>
+                        <th>Result</th>
+                        <th>Time</th>
+                    </tr>
+                </thead>
+                <tbody id="history-body"></tbody>
+            </table>
+        </div>
+    </div>
 
-              // we need to enable indications to allow the device to send data without being polled
-              // startNotifications() enables indications as well as notifications
-              return c.startNotifications();
-            })
-            .then(() => {
-              // "AutoSyncEnable" command, sets the device to send data when a measurement is
-              // triggered on the device
-              const data = new Uint8Array([0xc0, 0x55, 0x02, 0x01, 0x00, 0x1a]);
-              return characteristic.writeValue(data);
-            })
-            .then(() => {
-              // add listener for events (indications) triggered by device
-              characteristic.addEventListener(
-                "characteristicvaluechanged",
-                indicationEvent
-              );
-            })
-            .then(() => {
-              console.log("Server, service, characteristic ready", {
-                bluetoothGattServer,
-                service,
-                characteristic,
-              });
-              // a beep when we are done connecting
-              return beep();
-            })
-            .catch((error) => {
-              console.error("An error occurred: ", error);
-            });
+    <!-- Command Explorer -->
+    <div class="card hidden" id="explorer-card">
+        <h2>Command Explorer</h2>
+        <div class="controls" style="margin-bottom: 0.75em;">
+            <div class="control-group">
+                <span class="control-group-label">Command (hex)</span>
+                <input type="text" id="cmd-hex" value="40" placeholder="e.g. 40" style="width: 4em;">
+            </div>
+            <div class="control-group">
+                <span class="control-group-label">Payload (hex bytes)</span>
+                <input type="text" id="cmd-payload" placeholder="e.g. 00" style="width: 10em;">
+            </div>
+            <div class="control-group">
+                <button id="cmd-send-btn">Send</button>
+            </div>
+        </div>
+        <div style="margin-top: 0.75em; display: flex; gap: 0.5em; flex-wrap: wrap;">
+            <button id="scan-cmd-btn">Scan command</button>
+            <input type="text" id="scan-cmd" value="40" placeholder="cmd hex" style="width: 3em;">
+            <span style="font-size: 0.8em; color: #6b7280; align-self: center;">payload 0x00→0xFF, 300ms delay</span>
+            <button id="scan-stop-btn" class="danger hidden">Stop</button>
+        </div>
+        <pre id="scan-results" style="margin-top: 0.5em; font-size: 0.75em; color: #9ca3af; max-height: 300px; overflow-y: auto;"></pre>
+        <p style="font-size: 0.8em; color: #6b7280; margin-top: 0.75em;">Send raw commands to explore the device protocol. Watch the Raw BLE Log for responses.</p>
+    </div>
+
+    <!-- Raw Log -->
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h2 style="margin: 0;">Raw BLE Log</h2>
+            <button id="clear-log-btn" style="font-size: 0.75em;">Clear</button>
+        </div>
+        <div class="raw-log" id="raw-log"></div>
+    </div>
+
+    <script type="module">
+        import { BoschDevice } from './js/device.js';
+
+        let measurementCount = 0;
+        const $ = (id) => document.getElementById(id);
+
+        const connectBtn = $('connect-btn');
+        const disconnectBtn = $('disconnect-btn');
+        const statusDot = $('status-dot');
+        const statusText = $('status-text');
+        const measurementResult = $('measurement-result');
+        const measurementDetails = $('measurement-details');
+        const historyBody = $('history-body');
+        const rawLog = $('raw-log');
+
+        function getUnit(type) {
+            if (type === 'Angle') return '°';
+            if (type === 'Area') return 'm²';
+            if (type === 'Volume') return 'm³';
+            return 'm';
+        }
+
+        const device = new BoschDevice({
+            onStatusChange(state, message) {
+                statusDot.className = `status-dot ${state}`;
+                statusText.textContent = message;
+
+                const connected = state === 'connected';
+                connectBtn.classList.toggle('hidden', connected);
+                disconnectBtn.classList.toggle('hidden', !connected);
+                $('device-info-card').classList.toggle('hidden', !connected);
+                $('controls-card').classList.toggle('hidden', !connected);
+                $('explorer-card').classList.toggle('hidden', !connected);
+
+                if (connected) $('info-name').textContent = message;
+                if (state === 'disconnected') connectBtn.disabled = false;
+            },
+
+            onMeasurement(data) {
+                $('measurement-card').classList.remove('hidden');
+                $('history-card').classList.remove('hidden');
+
+                const isPartial = data.measurementType?.includes('partial');
+                const value = isPartial ? (data.component1 ?? 0) : (data.result ?? 0);
+                const type = data.measurementType || '—';
+                const unit = getUnit(type);
+
+                // Side measurements for area/volume final results
+                const sides = [];
+                if (!isPartial) {
+                    if (data.component1 && data.component1 !== 0) sides.push(data.component1);
+                    if (data.component2 && data.component2 !== 0) sides.push(data.component2);
+                }
+
+                measurementResult.innerHTML = `${value.toFixed(3)} <span class="unit">${unit}</span>`;
+
+                // Details
+                const details = [];
+                if (type) details.push(['Type', type]);
+                if (data.distanceReference) details.push(['Reference', data.distanceReference]);
+                if (data.source) details.push(['Source', data.source]);
+                if (data.battery !== undefined) details.push(['Battery', `${data.battery}%`]);
+                if (data.temperature !== undefined) details.push(['Temp', `${data.temperature}°C`]);
+                if (data.angle !== undefined && data.angle !== 0) details.push(['Angle', `${data.angle.toFixed(1)}°`]);
+                if (data.compassHeading !== undefined && data.compassHeading !== 0) details.push(['Compass', `${data.compassHeading}°`]);
+                if (sides.length > 0) details.push(['Sides', sides.map(s => `${s.toFixed(3)} m`).join(' × ')]);
+                if (data.uniqueId !== undefined) details.push(['ID', `0x${data.uniqueId.toString(16)}`]);
+                if (data.lowBattery) details.push(['Warning', 'Low battery']);
+                if (data.temperatureWarning) details.push(['Warning', 'Temperature']);
+
+                measurementDetails.innerHTML = details.map(
+                    ([label, val]) => `<div class="detail"><label>${label}</label><span>${val}</span></div>`
+                ).join('');
+
+                // History
+                measurementCount++;
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${measurementCount}</td>
+                    <td>${data.source || '—'}</td>
+                    <td>${type}</td>
+                    <td>${value.toFixed(3)} ${unit}${sides.length ? ` (${sides.map(s => s.toFixed(3)).join(' × ')})` : ''}</td>
+                    <td>${new Date().toLocaleTimeString()}</td>
+                `;
+                historyBody.prepend(row);
+
+                // Update device info
+                if (data.battery !== undefined) $('info-battery').textContent = `${data.battery}%`;
+                if (data.temperature !== undefined) $('info-temperature').textContent = `${data.temperature}°C`;
+                if (data.laserOn !== undefined) $('info-laser').textContent = data.laserOn ? 'On' : 'Off';
+
+            },
+
+            onStatus(status) {
+                const cls = status.isSuccess ? 'rx' : 'err';
+                log(`Status: ${status.statusMessage}${status.hardwareError ? ' [HW Error]' : ''}${status.notReady ? ' [Not Ready]' : ''}`, cls);
+            },
+
+            onRawFrame(message, hex) {
+                log(`RX: ${hex}`, 'rx');
+            },
         });
 
-      document.getElementById("beep-btn").addEventListener("click", longBeep);
+        // --- Event listeners ---
 
-      document.getElementById("measure-btn").addEventListener("click", () => {
-        console.log("send: measure");
-        // measure
-        return characteristic.writeValue(
-          new Uint8Array([0xc0, 0x40, 0x01, 0x00, 0xfa])
-        );
-      });
-      document.getElementById("laser-on").addEventListener("click", () => {
-        console.log("send: laser on");
-        // laser on
-        return characteristic.writeValue(
-          new Uint8Array([0xc0, 0x41, 0x00, 0x96])
-        );
-      });
-
-      function setDeviceInfo(device) {
-        let tableCells = document.querySelectorAll("#device-info td");
-
-        tableCells[0].innerHTML = device.id;
-        tableCells[1].innerHTML = device.name;
-        tableCells[2].innerHTML = device.gatt.connected;
-        tableCells[3].innerHTML = new Date().toISOString();
-      }
-
-      function setInfoGattConnected(gattConnected) {
-        let tableCells = document.querySelectorAll("#device-info td");
-        tableCells[2].innerHTML = gattConnected;
-      }
-
-      function beep() {
-        console.log("send: beep on, beep off");
-
-        // turn beeper on
-        return characteristic
-          .writeValue(new Uint8Array([0xc0, 0x45, 0x00, 0xd0]))
-          .then(() => {
-            // turn beeper off
-            return characteristic.writeValue(
-              new Uint8Array([0xc0, 0x46, 0x00, 0x58])
-            );
-          });
-      }
-
-      function longBeep() {
-        console.log("Send: beep on, beep off");
-        // turn beeper on
-        return characteristic
-          .writeValue(new Uint8Array([0xc0, 0x45, 0x00, 0xd0]))
-          .then(() => {
-            return new Promise((resolve) => {
-              setTimeout(() => {
-                characteristic
-                  .writeValue(new Uint8Array([0xc0, 0x46, 0x00, 0x58]))
-                  .then(resolve);
-              }, 750);
-            });
-          });
-      }
-
-      function indicationEvent(event) {
-        // event.target.value is a DataView containing the characteristic's new value
-        let message = event.target.value;
-
-        // Join the hexadecimal strings into a single string
-        // to display the full command in a human-readable format
-        let hexString = dataViewToString(message);
-
-        if (hexString === "000082") {
-          console.log("Receive:", "OK");
-        } else if (hexString.startsWith("c055")) {
-          // mode: 0xc0, request-command: 0x55
-          // 0x55 is command 85 which is "Exchange data container"
-          // this example assumes it is a distance measurement triggered
-          // from the device, other commands are not accounted for
-          // check MT_connectivity_protocol_LRF_command_set_2_5_0.pdf for more
-          console.log("Receive:", "Exchange Data Container");
-          parseExchangeDataContainer(message, hexString);
-        } else if (hexString.length === 14 && hexString.startsWith("0004")) {
-          // assume it is a measurement triggered from browser
-          console.log("Receive:", "Short Form Message");
-
-          // TODO: parse these into actual measurements
-          document.getElementById("triggered-measurements").innerHTML += `<span>
-			${hexString}</span>`;
-        } else {
-          console.log("Receive:", "Unknown", hexString);
-        }
-      }
-
-    function parseExchangeDataContainer(message, hexString) {
-        // Extract the mode, request-command, data length, data, and checksum
-        let mode = hexString.slice(0, 2);
-        let requestCommand = hexString.slice(2, 4);
-        let dataLengthHex = hexString.slice(4, 6);
-        let dataLength = parseInt(dataLengthHex, 16);
-        let data = dataLength === 0 ? {} : extractData(message, 3, dataLength);
-        let checksum = hexString.slice(-2); // TODO: verification of the checksum (CRC8)
-
-        console.log("Message:", {
-          RawMessage: message,
-          MessageAsHexString: hexString,
-          SplitIntoParts: {
-            mode,
-            requestCommand,
-                dataLengthHex,
-                dataLength,
-            checksum,
-          },
-            dataHex: hexString.slice(6, 6 + 2 * dataLength),
-            data
+        connectBtn.addEventListener('click', async () => {
+            connectBtn.disabled = true;
+            try {
+                await device.connect();
+            } catch (err) {
+                statusDot.className = 'status-dot error';
+                statusText.textContent = err.message || 'Connection failed';
+                connectBtn.disabled = false;
+            }
         });
 
-        let measurementSpan = document.getElementById("device-measurements");
-        measurementSpan.innerHTML += `<span>
-		  ${data.result.toFixed(3)}</span>`;
-    }
+        disconnectBtn.addEventListener('click', () => device.disconnect());
 
-    function extractData(message, start, length)
-    {
-        if (length < 16) {
-            console.error("Data length is too short");
-            return {};
+        $('measure-btn').addEventListener('click', async () => {
+            try {
+                const edge = parseInt($('edge-select').value);
+                await device.measure(edge);
+                log(`TX: measure(edge=${edge})`, 'tx');
+            } catch (err) {
+                log(`Error: ${err.message}`, 'err');
+            }
+        });
+
+        $('laser-on-btn').addEventListener('click', async () => {
+            try {
+                await device.laserOn();
+                log('TX: laserOn', 'tx');
+            } catch (err) {
+                log(`Error: ${err.message}`, 'err');
+            }
+        });
+
+        $('beep-btn').addEventListener('click', async () => {
+            try {
+                await device.beep(500);
+                log('TX: beep', 'tx');
+            } catch (err) {
+                log(`Error: ${err.message}`, 'err');
+            }
+        });
+
+        $('backlight-on-btn').addEventListener('click', async () => {
+            try {
+                await device.backlightOn();
+                log('TX: backlightOn', 'tx');
+            } catch (err) {
+                log(`Error: ${err.message}`, 'err');
+            }
+        });
+
+        $('backlight-off-btn').addEventListener('click', async () => {
+            try {
+                await device.backlightOff();
+                log('TX: backlightOff', 'tx');
+            } catch (err) {
+                log(`Error: ${err.message}`, 'err');
+            }
+        });
+
+        // Command Explorer
+        function parseHexBytes(str) {
+            const clean = str.replace(/\s+/g, '');
+            if (!clean) return null;
+            const bytes = [];
+            for (let i = 0; i < clean.length; i += 2) {
+                bytes.push(parseInt(clean.substr(i, 2), 16));
+            }
+            return new Uint8Array(bytes);
         }
-        // TODO: handle data length > 16
 
-        let DevModeRef = message.getUint8(start);
-        let DevStatus = message.getUint8(start+1);
-        let UniqueID = message.getUint16(start+2);
-
-        // Create an ArrayBuffer with enough space to hold the measurements (4 bytes
-        // Create a DataView from the ArrayBuffer
-        let resultDataView = new DataView(new ArrayBuffer(4));
-        let component1DataView = new DataView(new ArrayBuffer(4));
-        let component2DataView = new DataView(new ArrayBuffer(4));
-
-
-
-        // Loop over the measurement bytes in the DataView
-        for (let i = start+4; i < start+8; i++) {
-            // Get the byte as an unsigned 8-bit integer
-            let byte = message.getUint8(i);
-            resultDataView.setUint8(i - 4-start, byte);
-        }
-        for (let i = start+8; i < start+12; i++) {
-            let byte = message.getUint8(i);
-            component1DataView.setUint8(i - 8-start, byte);
-        }
-        for (let i = start+12; i < start+16; i++) {
-            let byte = message.getUint8(i);
-            component2DataView.setUint8(i - 12-start, byte);
+        async function sendExplorerCommand() {
+            const cmd = parseInt($('cmd-hex').value.trim(), 16);
+            if (isNaN(cmd)) { log('Error: invalid command', 'err'); return; }
+            const payload = $('cmd-payload').value.trim() ? parseHexBytes($('cmd-payload').value.trim()) : undefined;
+            try {
+                await device.sendCommand(cmd, payload);
+                const payloadStr = payload ? ` [${Array.from(payload).map(b => b.toString(16).padStart(2, '0')).join(' ')}]` : '';
+                log(`TX: cmd 0x${cmd.toString(16).padStart(2, '0')}${payloadStr}`, 'tx');
+            } catch (err) {
+                log(`Error: ${err.message}`, 'err');
+            }
         }
 
-        return {
-            DevModeRef,
-            DevModeRefHex: DevModeRef.toString(16),
-            DevModeRefBin: DevModeRef.toString(2),
-            DevMode: DevModeRef>>2,
-            ReferenceEdge: DevModeRef & 11,
-            DevStatus,
-            DevStatusHex: DevStatus.toString(16),
-            DevStatusBin: DevStatus.toString(2),
-            MetricSystem: (DevStatus & 0b1000) !== 0,
-            LowBatteryWarning: (DevStatus & 0b0100) !== 0,
-            TemperatureWarning: (DevStatus & 0b0010) !== 0,
-            LaserStatus: (DevStatus & 0b0001) !== 0,
-            UniqueID,
-            UniqueIDHex: UniqueID.toString(16),
-            UniqueIDBin: UniqueID.toString(2),
-            result : resultDataView.getFloat32(0, true),
-            component1 : component1DataView.getFloat32(0, true),
-            component2 : component2DataView.getFloat32(0, true)
-        };
-      }
+        $('cmd-send-btn').addEventListener('click', sendExplorerCommand);
 
-      function dataViewToString(dataView) {
-        let hexString = "";
-        for (let i = 0; i < dataView.byteLength; i++) {
-          let byte = dataView.getUint8(i);
-          hexString += byte.toString(16).padStart(2, "0");
+        // --- Scan ---
+        let scanAbort = false;
+
+        $('scan-stop-btn').addEventListener('click', () => { scanAbort = true; });
+
+        $('scan-cmd-btn').addEventListener('click', async () => {
+            const cmd = parseInt($('scan-cmd').value.trim(), 16);
+            if (isNaN(cmd)) { log('Error: invalid command', 'err'); return; }
+
+            const btn = $('scan-cmd-btn');
+            const stopBtn = $('scan-stop-btn');
+            const results = $('scan-results');
+            btn.disabled = true;
+            stopBtn.classList.remove('hidden');
+            scanAbort = false;
+            results.textContent = `Scanning CMD 0x${cmd.toString(16).padStart(2, '0')} with payload 0x00→0xFF...\n\n`;
+
+            const responseMap = new Map();
+
+            for (let val = 0; val <= 0xff && !scanAbort; val++) {
+                const hex = val.toString(16).padStart(2, '0');
+                try {
+                    // Capture the raw response
+                    // Reset busy flag before each scan step
+                    device._busy = false;
+
+                    const response = await new Promise((resolve) => {
+                        const timeout = setTimeout(() => { cleanup(); resolve('timeout'); }, 1500);
+                        const originalOnRaw = device._events.onRawFrame;
+                        let captured = false;
+
+                        device._events.onRawFrame = (message, rxHex) => {
+                            originalOnRaw(message, rxHex);
+                            if (!captured) {
+                                captured = true;
+                                cleanup();
+                                resolve(rxHex);
+                            }
+                        };
+
+                        const cleanup = () => {
+                            clearTimeout(timeout);
+                            device._events.onRawFrame = originalOnRaw;
+                        };
+
+                        device.sendCommand(cmd, new Uint8Array([val])).catch(() => {
+                            cleanup();
+                            resolve('send_error');
+                        });
+                    });
+
+                    // Group by response
+                    if (!responseMap.has(response)) {
+                        responseMap.set(response, []);
+                    }
+                    responseMap.get(response).push(val);
+
+                    results.textContent += `0x${hex} → ${response}\n`;
+                    results.scrollTop = results.scrollHeight;
+                } catch (err) {
+                    results.textContent += `0x${hex} → error: ${err.message}\n`;
+                }
+
+                await new Promise(r => setTimeout(r, 200));
+            }
+
+            // Summary
+            results.textContent += `\n--- Summary (CMD 0x${cmd.toString(16).padStart(2, '0')}) ---\n`;
+            for (const [resp, vals] of responseMap) {
+                const ranges = compactRanges(vals);
+                results.textContent += `${resp}: ${ranges}\n`;
+            }
+
+            btn.disabled = false;
+            stopBtn.classList.add('hidden');
+        });
+
+        // Compact [0,1,2,5,6,10] → "0x00-0x02, 0x05-0x06, 0x0a"
+        function compactRanges(values) {
+            if (values.length === 0) return '';
+            const sorted = [...values].sort((a, b) => a - b);
+            const ranges = [];
+            let start = sorted[0], end = sorted[0];
+            for (let i = 1; i < sorted.length; i++) {
+                if (sorted[i] === end + 1) {
+                    end = sorted[i];
+                } else {
+                    ranges.push(start === end
+                        ? `0x${start.toString(16).padStart(2, '0')}`
+                        : `0x${start.toString(16).padStart(2, '0')}-0x${end.toString(16).padStart(2, '0')}`);
+                    start = end = sorted[i];
+                }
+            }
+            ranges.push(start === end
+                ? `0x${start.toString(16).padStart(2, '0')}`
+                : `0x${start.toString(16).padStart(2, '0')}-0x${end.toString(16).padStart(2, '0')}`);
+            return ranges.join(', ');
         }
-        return hexString;
-      }
+
+        $('clear-history-btn').addEventListener('click', () => {
+            historyBody.innerHTML = '';
+            measurementCount = 0;
+            measurementResult.innerHTML = '—';
+            measurementDetails.innerHTML = '';
+        });
+
+        $('clear-log-btn').addEventListener('click', () => { rawLog.innerHTML = ''; });
+
+        function log(text, cls = '') {
+            const line = document.createElement('div');
+            if (cls) line.className = cls;
+            line.textContent = `[${new Date().toLocaleTimeString()}] ${text}`;
+            rawLog.prepend(line);
+            while (rawLog.children.length > 200) rawLog.removeChild(rawLog.lastChild);
+        }
+
+        if (!navigator.bluetooth) {
+            $('warning').style.display = 'block';
+            connectBtn.disabled = true;
+        }
     </script>
-  </body>
+</body>
 </html>
